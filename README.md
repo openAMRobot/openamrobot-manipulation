@@ -2,7 +2,9 @@
 
 Shared arm-integration framework for the OpenAMRobot ecosystem. Consumed by both the mobile manipulator (`openamr-upperbody-*`) and the future humanoid (`openamh-humanoid-*`).
 
-**Status:** planning / early development (v0.2 cycle).
+> **Status:** Planned, no code yet
+
+The v0.2 cycle is in design. This repository currently holds only this README.
 
 ## What lives here
 - **Manipulation server:** one arm-agnostic API to move any supported arm (named poses, plan, preview, execute, stop, gripper).
