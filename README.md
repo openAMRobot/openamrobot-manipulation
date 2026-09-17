@@ -1,29 +1,66 @@
 # openamrobot-manipulation
 
-Shared arm-integration framework for the OpenAMRobot ecosystem. Consumed by both the mobile manipulator (`openamr-upperbody-*`) and the future humanoid (`openamh-humanoid-*`).
+Shared arm-integration framework for the OpenAMRobot ecosystem. It provides the common manipulation layer used by OpenAMRobot mobile-manipulation systems while keeping vendor-specific arm integration behind a stable Device Package boundary.
 
-> **Status:** Planned, no code yet
+> **Status:** OpenAMRobot 2.0 development / integration scaffold
 
-The v0.2 cycle is in design. This repository currently holds only this README.
+The OpenAMRobot 2.0 cycle is focused on integrating a real bimanual manipulation stack around **OpenArm 2.0** while preserving an arm-agnostic common API. **ReBot** is retained only as a secondary portability/API-validation target.
 
 ## What lives here
-- **Manipulation server:** one arm-agnostic API to move any supported arm (named poses, plan, preview, execute, stop, gripper).
-- **Device Package format:** a self-contained folder that adds an arm or device (description, controllers, MoveIt config, UI panel, blocks, manifest).
-- **Reference arm packages:** Franka (Panda / FR3) and ReBot (Seeed Studio).
 
-Software only. Physical arms are vendor hardware; the lift and mounts live in `openamr-upperbody-hw`.
+- **Manipulation server:** one arm-agnostic API for named poses, plan/preview/execute, stop, gripper control, Cartesian motion, contact-aware primitives, readiness, recovery and capability discovery.
+- **Device Package format:** a self-contained integration boundary for an arm/device: description, controllers, MoveIt configuration, capability manifest, diagnostics, UI/Blockly integration and LeRobot mapping.
+- **Reference Device Packages:** **OpenArm 2.0** as the primary physical manipulation path; **ReBot** as secondary portability/API validation.
+- **Normalized execution semantics:** per-action timeout, typed failure results, constrained placement, bounded abort/retract behavior and controller-ownership handover.
 
-## What we are building (v0.2)
-1. Manipulation server exposing a small, stable action API over MoveIt.
-2. Device Package specification, extracted from the first real integration, then proven on a second arm.
-3. Two reference arm packages (Franka, ReBot) that pass the same integration path with no core-file edits.
+Software and common integration logic live here. Physical upper-body structure, mast and arm mounting belong in `openamr-upperbody-hw`; upper-body hardware-specific integration belongs in the corresponding `openamr-upperbody-*` repositories.
+
+## OpenAMRobot 2.0 scope
+
+1. Implement a small, stable manipulation API over **MoveIt 2** and `ros2_control` / supported vendor interfaces.
+2. Integrate **OpenArm 2.0** as the primary physical Device Package using upstream/vendor software wherever practical rather than reimplementing drivers, kinematics or planning.
+3. Define the Device Package contract from the real OpenArm integration, then validate portability with **ReBot** without changing the common API.
+4. Provide capability discovery so UI and higher-level applications do not hard-code vendor-specific arm behavior.
+5. Provide explicit readiness and controller-ownership states. In OpenAMRobot 2.0, the mobile base and active arm joints/end effectors do **not** move at the same time.
+6. Support the Embodied-AI workflow through a clean mapping to the project data/training layer, with **LeRobot** as the reference dataset and imitation-learning ecosystem.
+
+## Integration principle
+
+**Integration over invention.** Reuse maintained upstream packages and vendor-supported components first. OpenAMRobot-specific code should be limited to stable common interfaces, Device Packages, normalized capabilities/failures, readiness/ownership semantics, project-specific validation and thin adapters.
+
+For deterministic manipulation, use **MoveIt 2** for robot model, kinematics, planning scene, collision checking, reachability, named poses and conventional trajectories. Learned policies may execute bounded task skills through declared interfaces, but do not replace the deterministic safety/control boundary.
 
 ## Contracts owned elsewhere
-- API message / service / action definitions live in `openamrobot-interfaces`.
-- Device Package UI panels and blocks are loaded by `openamrobot-ui`.
 
-## Design rule
-Arm-agnostic by construction. The framework commits to an interface, not to an arm. Any supported arm is one Device Package plus one docs page.
+- Shared ROS 2 messages, services, actions and schemas live in `openamrobot-interfaces`.
+- Device Package UI panels, Blockly blocks and operator surfaces are consumed by `openamrobot-ui`.
+- Exact compatible component versions belong in `openamrobot-manifest` / release metadata.
+
+## Design rules
+
+- Arm-agnostic common API; vendor-specific code stays behind a Device Package.
+- **OpenArm 2.0 is the primary physical arm for the current release cycle.**
+- **ReBot is secondary portability/API validation only.**
+- No vendor SDK calls from the UI.
+- No custom replacement for MoveIt planning where existing MoveIt functionality satisfies the requirement.
+- Base motion and active arm motion are mutually exclusive; readiness must be explicit and testable.
+- Every material action has a timeout and a normalized result/failure state.
+- Safety authority remains deterministic and independent of AI/LLM output.
+- Simulation and learned-policy paths must use the same public platform contracts as physical execution wherever practical.
+
+## Validation direction
+
+The OpenArm 2.0 Device Package should be validated progressively through:
+
+1. schema/static checks;
+2. unit and contract tests;
+3. fake-hardware / simulation bring-up;
+4. MoveIt planning and named-pose execution;
+5. capability discovery and unsupported-capability rejection;
+6. controller-ownership and base/manipulation readiness tests;
+7. supervised physical-arm integration and acceptance evidence.
+
+A second Device Package should demonstrate that portability does not require edits to common manipulation code. If core files must be changed merely to add the second arm, treat that as a defect in the Device Package boundary rather than a vendor-specific workaround.
 
 Part of the OpenAMRobot ecosystem: https://github.com/openAMRobot
 
