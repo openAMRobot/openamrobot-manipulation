@@ -34,7 +34,7 @@ import yaml
 
 try:  # use the real library in CI when it is installed
     import jsonschema as _jsonschema  # type: ignore
-except ImportError:  # pragma: no cover - fallback path is what runs in the sandbox
+except ImportError:  # pragma: no cover - built-in fallback when jsonschema is not installed
     _jsonschema = None
 
 PENDING = "PENDING"
@@ -301,7 +301,8 @@ def resolve_request(manifest: dict, caps: dict, action: str, *,
     """Reference for A5 section 13: what the common server does with a request.
 
     Unsupported -> ACTION_REJECTED, message names the capability, device never invoked,
-    no motion. (Jonathan's UNSUPPORTED_CAPABILITY is not an I1 code; it surfaces as this.)
+    no motion. (The UNSUPPORTED_CAPABILITY code of the SO-101 sketch in PR #18 is not an I1
+    code; it surfaces as ACTION_REJECTED.)
     """
     if action in COMMON_SERVER_ACTIONS:
         return {"result": None, "dispatch": True, "device_invoked": True, "motion": None}
@@ -431,9 +432,7 @@ def validate_package(root: str | Path, strict: bool = False) -> Report:
         caps = None
 
     _cross_checks(manifest, caps, rep)
-    _collect_pending(manifest, caps, rep)
-    if strict and rep.pending:
-        pass  # exit_code handles it; the list is the explanation
+    _collect_pending(manifest, caps, rep)  # with strict, Report.exit_code turns pending into 2
     return rep
 
 
@@ -564,7 +563,6 @@ def _cross_checks(m: dict, caps: dict | None, rep: Report) -> None:
         return
     c = caps["capabilities"]
     acts = {a: _norm_action(c["actions"][a]) for a in ACTIONS}
-    ft = c["force_torque_sensing"]
 
     # --- abort modes ------------------------------------------------------------
     def check_modes(label: str, modes: list[str], sels: set[str]) -> None:
