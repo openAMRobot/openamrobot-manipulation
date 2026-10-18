@@ -47,9 +47,12 @@ class Base(unittest.TestCase):
         return vp.validate_package(root)
 
     def assertRejects(self, rep, fragment):
+        """`fragment` may be a tuple: the schema backend (jsonschema or the built-in
+        fallback) words the same rejection differently, and either is accepted."""
+        fragments = fragment if isinstance(fragment, tuple) else (fragment,)
         self.assertFalse(rep.valid, "expected INVALID but package validated")
-        self.assertTrue(any(fragment in e for e in rep.errors),
-                        f"no error containing {fragment!r}; got:\n" + "\n".join(rep.errors))
+        self.assertTrue(any(f in e for e in rep.errors for f in fragments),
+                        f"no error containing any of {fragments!r}; got:\n" + "\n".join(rep.errors))
 
 
 def validated(reason_ref="test:e2e", kind="SIM_FAKE_E2E"):
@@ -119,7 +122,7 @@ class TestBothPackages(Base):
 # ------------------------------------------------------------- reject: manifest
 class TestManifestRejections(Base):
     def test_missing_required_section(self):
-        self.assertRejects(self.mutate("so101", lambda m: m.pop("gripper")), "'gripper' is a required property")
+        self.assertRejects(self.mutate("so101", lambda m: m.pop("gripper")), ("'gripper' is a required property", "missing required key 'gripper'"))
 
     def test_missing_maintainer(self):
         self.assertRejects(self.mutate("so101", lambda m: m["device"].pop("maintainer")), "maintainer")
@@ -131,7 +134,7 @@ class TestManifestRejections(Base):
         self.assertRejects(self.mutate("so101", caps_fn=lambda c: c.update(supported_actions=["plan"])), "supported_actions")
 
     def test_unknown_top_level_key(self):
-        self.assertRejects(self.mutate("so101", lambda m: m.update(extra=1)), "Additional properties are not allowed")
+        self.assertRejects(self.mutate("so101", lambda m: m.update(extra=1)), ("Additional properties are not allowed", "unknown key 'extra'"))
 
     def test_version_major_mismatch(self):
         self.assertRejects(self.mutate("so101", lambda m: m.update(schema_version="1.0")), "incompatible")
@@ -353,7 +356,7 @@ class TestCapabilityRejections(Base):
     def test_bad_status(self):
         def g(c):
             c["actions"]["plan"] = {"status": "maybe", "reason": "x"}
-        self.assertRejects(self.mutate("so101", caps_fn=g), "is not valid under any of the given schemas")
+        self.assertRejects(self.mutate("so101", caps_fn=g), ("is not valid under any of the given schemas", "does not match any allowed form"))
 
     def test_ft_invalid_enum(self):
         def g(c):
