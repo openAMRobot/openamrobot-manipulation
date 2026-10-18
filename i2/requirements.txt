@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: MIT
+# Python dependencies of the I2 validator and its tests (i2/validator, i2/tests).
+# Tested with Python 3.11 and 3.12.
+#   PyYAML      MIT         https://pypi.org/project/PyYAML/      (apt: python3-yaml)
+#   jsonschema  MIT         https://pypi.org/project/jsonschema/  (apt: python3-jsonschema)
+# Without jsonschema the validator falls back to its built-in schema checker;
+# both backends are exercised by i2/tests. Tested: jsonschema 4.10.3 and 4.26.0.
+PyYAML>=6.0
+jsonschema>=4.10
