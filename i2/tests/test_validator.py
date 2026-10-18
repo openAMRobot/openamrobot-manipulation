@@ -648,5 +648,25 @@ class TestDuplicateKeys(Base):
         self.assertRejects(vp.validate_package(root), "duplicate key 'compliant_hold'")
 
 
+# ------------------------------------------------------------------ OpenArm names
+class TestOpenArmNamesMatchFakeBaseline(Base):
+    """The OpenArm example must use the joint names of the pinned upstream model,
+    as used by integration/openarm_v2_fake_baseline (and the combined model)."""
+
+    def test_joint_and_group_names(self):
+        sys.path.insert(0, str(ROOT.parent / "integration" / "openarm_v2_fake_baseline"))
+        from openarm_v2_fake_baseline import fake_profile as fp  # noqa: E402
+        m = yaml.safe_load((PKGS["openarm"] / "device_package.yaml").read_text())
+        rc = m["ros2_control"]
+        by_name = {x["name"]: x["manipulator_id"] for x in m["device"]["manipulators"]}
+        for side in fp.ARM_SIDES:
+            self.assertEqual(rc["manipulator_joints"][by_name[f"{side}_arm"]], fp.ARM_JOINTS[side])
+        self.assertEqual(rc["gripper_joints"], [j for s in fp.ARM_SIDES for j in fp.GRIPPER_JOINTS[s]])
+        expected = [j for s in fp.ARM_SIDES for j in fp.ARM_JOINTS[s]] + rc["gripper_joints"]
+        self.assertEqual(sorted(rc["joints"]), sorted(expected))
+        groups = {g["name"] for g in m["moveit"]["planning_groups"]}
+        self.assertTrue({"left_arm", "right_arm"} <= groups, groups)
+
+
 if __name__ == "__main__":
     unittest.main()
