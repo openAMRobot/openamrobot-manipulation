@@ -622,5 +622,31 @@ class TestActionRejected(Base):
             vp.resolve_request(m, c, "cartesian_moton")
 
 
+# ------------------------------------------------------------------ duplicate keys
+class TestDuplicateKeys(Base):
+    """YAML silently keeps the last of two equal keys; the validator must reject it."""
+
+    def test_duplicate_key_in_manifest(self):
+        root = self.copy_pkg("so101")
+        p = root / "device_package.yaml"
+        p.write_text(p.read_text().replace('schema_version: "0.5"', 'schema_version: "0.5"\nschema_version: "0.5"', 1))
+        self.assertRejects(vp.validate_package(root), "duplicate key 'schema_version'")
+
+    def test_duplicate_section_in_manifest(self):
+        root = self.copy_pkg("openarm")
+        p = root / "device_package.yaml"
+        p.write_text(p.read_text() + "\ngripper:\n  has_gripper: false\n")
+        self.assertRejects(vp.validate_package(root), "duplicate key 'gripper'")
+
+    def test_duplicate_action_in_capabilities(self):
+        root = self.copy_pkg("so101")
+        p = root / "capabilities" / "capabilities.yaml"
+        text = p.read_text()
+        marker = "    compliant_hold:\n"
+        self.assertIn(marker, text)
+        p.write_text(text.replace(marker, "    compliant_hold: supported\n" + marker, 1))
+        self.assertRejects(vp.validate_package(root), "duplicate key 'compliant_hold'")
+
+
 if __name__ == "__main__":
     unittest.main()
