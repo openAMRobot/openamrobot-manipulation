@@ -127,4 +127,4 @@ None of these values has been checked against hardware, CAD or the combined mode
 ## 8. Documentation discrepancies (reported, not edited here)
 
 - [`openamr-upperbody-sw` README @ `d090ec5`](https://github.com/openAMRobot/openamr-upperbody-sw/blob/d090ec545f4450e4c94335dded6e2f001cf494d6/README.md) describes an actuated lift ("Lift control", "base + lift + arm", "arm + lift" planning groups). With the lift column (P-03 rev19.0) this matches the 2.0 direction; its details are not checked here. Superseded by P-03 rev18.8/18.9: "This is stale for 2.0: the mast is fixed and the lift is deferred."
-- This repository's `README.md` (main @ `6198d48`) still names **ReBot** as the secondary portability target. The current secondary fixture is **SO-101**.
+- Resolved: this repository's `README.md` (main @ `6198d48`) named **ReBot** as the secondary portability target; on main @ `be76d30` it names **SO-101**, the current secondary fixture.
