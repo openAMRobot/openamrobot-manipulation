@@ -96,3 +96,52 @@ def test_guard_detects_real_hardware_description():
     assert 'openarm_hardware/OpenArmHW' in real_urdf
     with pytest.raises(fp.FakeProfileError, match='non-mock hardware plugin'):
         fp.assert_mock_only(real_urdf)
+
+def test_moveit_controller_mapping_matches_upstream_names():
+    share = get_package_share_directory('openarm_bimanual_moveit_config')
+    path = os.path.join(share, 'config', 'openarm_v2.0', 'moveit_controllers.yaml')
+    with open(path) as stream:
+        cfg = yaml.safe_load(stream)
+
+    manager = cfg['moveit_simple_controller_manager']
+    assert cfg['moveit_controller_manager'] == (
+        'moveit_simple_controller_manager/MoveItSimpleControllerManager')
+
+    for side in fp.ARM_SIDES:
+        name = fp.ARM_CONTROLLERS[side]
+        controller = manager[name]
+        assert name in manager['controller_names']
+        assert controller['type'] == 'FollowJointTrajectory'
+        assert controller['action_ns'] == 'follow_joint_trajectory'
+        assert controller['joints'] == fp.ARM_JOINTS[side]
+
+        gripper_name = fp.GRIPPER_CONTROLLERS[side]
+        gripper = manager[gripper_name]
+        assert gripper_name in manager['controller_names']
+        assert gripper['type'] == 'GripperCommand'
+        assert gripper['joints'] == fp.GRIPPER_JOINTS[side]
+
+
+def test_fake_moveit_gripper_mapping_matches_fake_controllers():
+    """Fake MoveIt config must target the JTC action endpoints."""
+    from ament_index_python.packages import get_package_share_directory
+
+    path = os.path.join(
+        get_package_share_directory('openarm_v2_fake_baseline'),
+        'config',
+        'moveit_controllers_fake.yaml',
+    )
+
+    with open(path) as stream:
+        cfg = yaml.safe_load(stream)
+
+    manager = cfg['moveit_simple_controller_manager']
+
+    for side in fp.ARM_SIDES:
+        name = fp.GRIPPER_CONTROLLERS[side]
+        controller = manager[name]
+
+        assert name in manager['controller_names']
+        assert controller['type'] == 'FollowJointTrajectory'
+        assert controller['action_ns'] == 'follow_joint_trajectory'
+        assert controller['joints'] == fp.GRIPPER_JOINTS[side]

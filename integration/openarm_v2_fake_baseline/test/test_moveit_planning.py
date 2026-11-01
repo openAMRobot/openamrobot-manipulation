@@ -1,17 +1,10 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 OpenAMRobot (Botshare LTD)
-"""Headless move_group with the pinned upstream v2.0 MoveIt config.
+"""Headless move_group tests using the pinned upstream v2.0 MoveIt config.
 
-Planning and fake execution are reported as separate tests.
-
-KNOWN UPSTREAM FAILURE (pinned openarm_ros2 4e837e1, MoveIt 2.12.4 on Jazzy):
-config/openarm_v2.0/joint_limits.yaml sets has_acceleration_limits: false for
-every joint, so the default OMPL pipeline's AddTimeOptimalParameterization
-adapter rejects every plan ("No acceleration limit was defined for joint
-openarm_left_joint1!"). The planning/execution tests are strict xfails: they
-are reported as failures-by-design, never as passes, and will turn red
-(XPASS) once upstream supplies acceleration limits. This package does not
-invent acceleration limits.
+Planning and fake execution are tested separately. The dependency manifest
+pins the upstream commit that enables MoveIt acceleration limits for v2.0.
+Those upstream values are not real-hardware qualification or safety approval.
 """
 
 import os
@@ -31,10 +24,6 @@ from moveit_msgs.srv import GetMotionPlan
 from fake_stack import LaunchedStack, Probe
 from openarm_v2_fake_baseline import fake_profile as fp
 
-UPSTREAM_TOTG_XFAIL = pytest.mark.xfail(
-    strict=True, raises=AssertionError,
-    reason='upstream v2.0 joint_limits.yaml has no acceleration limits; '
-           'MoveIt TOTG adapter fails every plan')
 NAMED_STATE = 'hands_up'  # Upstream SRDF group_state, not an OpenAMRobot pose.
 MOVEIT_V20 = os.path.join(get_package_share_directory('openarm_bimanual_moveit_config'),
                           'config', 'openarm_v2.0')
@@ -49,13 +38,18 @@ def _named_state(group):
     raise LookupError(f'{NAMED_STATE} not defined for {group} in {SRDF}')
 
 
-def test_root_cause_upstream_joint_limits_lack_acceleration():
-    """Pins the root cause of the xfails above; fails once upstream changes it."""
+def test_upstream_joint_limits_enable_acceleration():
+    """The pinned upstream config must provide positive limits for every actuated joint."""
     with open(os.path.join(MOVEIT_V20, 'joint_limits.yaml')) as f:
         limits = yaml.safe_load(f)['joint_limits']
-    arm_joints = [j for s in fp.ARM_SIDES for j in fp.ARM_JOINTS[s]]
-    assert set(arm_joints) <= set(limits)
-    assert not any(limits[j].get('has_acceleration_limits') for j in arm_joints)
+    actuated_joints = [
+        j for side in fp.ARM_SIDES
+        for j in fp.ARM_JOINTS[side] + fp.GRIPPER_JOINTS[side]
+    ]
+    assert set(actuated_joints) <= set(limits)
+    for joint in actuated_joints:
+        assert limits[joint].get('has_acceleration_limits') is True, joint
+        assert limits[joint].get('max_acceleration', 0) > 0, joint
 
 
 def test_move_group_plan_service_is_up(probe):
@@ -104,7 +98,6 @@ def _plan(probe, group, goal):
     return probe._call(GetMotionPlan, '/plan_kinematic_path', req, timeout=30.0)
 
 
-@UPSTREAM_TOTG_XFAIL
 @pytest.mark.parametrize('side', fp.ARM_SIDES)
 def test_plan_to_upstream_named_state(probe, side):
     group = f'{side}_arm'
@@ -119,7 +112,6 @@ def test_plan_to_upstream_named_state(probe, side):
         assert abs(final[j] - v) < 1e-2, (j, final[j], v)
 
 
-@UPSTREAM_TOTG_XFAIL
 def test_execute_planned_left_arm_on_fake_controller(probe):
     """Fake execution of a MoveIt plan (separate result from planning)."""
     goal = _named_state('left_arm')
@@ -141,4 +133,57 @@ def test_execute_planned_left_arm_on_fake_controller(probe):
         if all(abs(pos[j] - v) < 1e-2 for j, v in goal.items()):
             break
         assert time.monotonic() < deadline, pos
+        probe.spin_for(0.2)
+
+@pytest.mark.parametrize('side', fp.ARM_SIDES)
+def test_execute_planned_gripper_on_fake_controller(probe, side):
+    """Plan and execute a bounded gripper motion through MoveIt."""
+    group = f'{side}_gripper'
+    joint = fp.GRIPPER_JOINTS[side][0]
+
+    # Use the URDF-derived limits, not guessed joint bounds.
+    joints = fp.model_joints(probe.robot_description())
+    lower = joints[joint]['lower']
+    upper = joints[joint]['upper']
+
+    # Choose a small, nonzero target strictly inside the model limits.
+    target = lower + 0.2 * (upper - lower)
+    assert lower < target < upper
+
+    response = _plan(probe, group, {joint: target}).motion_plan_response
+    assert response.error_code.val == MoveItErrorCodes.SUCCESS, (
+        f'{side} gripper planning failed: {response.error_code.val}'
+    )
+
+    trajectory = response.trajectory.joint_trajectory
+    assert joint in trajectory.joint_names
+    assert len(trajectory.points) >= 2
+
+    client = ActionClient(probe, ExecuteTrajectory, '/execute_trajectory')
+    assert client.wait_for_server(timeout_sec=10.0)
+
+    send = client.send_goal_async(
+        ExecuteTrajectory.Goal(trajectory=response.trajectory)
+    )
+    rclpy.spin_until_future_complete(probe, send, timeout_sec=10.0)
+    handle = send.result()
+    assert handle is not None and handle.accepted
+
+    result_future = handle.get_result_async()
+    rclpy.spin_until_future_complete(probe, result_future, timeout_sec=60.0)
+    assert result_future.done(), f'{side} gripper execution timed out'
+    assert (
+        result_future.result().result.error_code.val
+        == MoveItErrorCodes.SUCCESS
+    )
+
+    deadline = time.monotonic() + 5.0
+    while True:
+        positions = probe.joint_positions()
+        if abs(positions[joint] - target) < 1e-2:
+            break
+        assert time.monotonic() < deadline, (
+            f'{side} gripper did not reach target: '
+            f'actual={positions.get(joint)}, target={target}'
+        )
         probe.spin_for(0.2)
