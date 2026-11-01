@@ -69,12 +69,12 @@ Upstream nominal inertials are not measured values for the OpenAMRobot build.
 
 ## 6. Lift configuration context (not a selection)
 
-Source: P-03 Decision Addendum revision 19.0, items 15 to 19 (12 October 2026), and the hardware BOM Issue 7.7. The values below are restated from those sources, not derived here. This inventory selects no lift stop, base-plate position or camera pitch and invents no transforms. The lift is approved in principle (decisions register entry LIFT). The `openAMRobot/.github` decisions register records the same geometry under LIFT, ARM-MOUNT, CONFIG-IDS, CAMERAS and HEAD-CAMERA-IDENTITY, with the 12 October 2026 platform decision marked "P-03 rev19.0 to record".
+Source: P-03 Decision Addendum revision 19.0, items 15 to 19 (12 October 2026), and the hardware BOM Issue 7.7 (superseded; Issue 7.14 is in force). Lift release gates follow P-03 rev20.2 item 26. The values below are restated from those sources, not derived here. This inventory selects no lift stop, base-plate position or camera pitch and invents no transforms. The lift is approved in principle (decisions register entry LIFT). The `openAMRobot/.github` decisions register records the same geometry under LIFT, ARM-MOUNT, CONFIG-IDS, CAMERAS and HEAD-CAMERA-IDENTITY.
 
 | Item | Value (P-03 rev19.0) |
 |---|---|
 | Upper body | lift column with option B (P-03 rev19.0 item 18), without the OpenArm supplied body (`openarm_body_link0` removed) |
-| Lift column | DOLD Hexalift V4 350 mm, order code BS-HM240G350530-MFF24; column 530 mm retracted / 880 mm extended; 11.7 kg (catalogue value) |
+| Lift column | DOLD Hexalift V4 350 mm (800 N push, 18 mm/s), order code BS-HM240G350530-MFF24, primary; TiMOTION TL3 400 mm fallback; column 530 mm retracted / 880 mm extended, mounted with its 240 mm side fore-aft; 11.7 kg (catalogue value) |
 | Shoulder height | 1000 mm at L1000, 1350 mm at L1350, at `openarm_{side}_base_link` (J1_A); shoulder datum decided in P-03 rev19.0 item 17 |
 | Lift stops | L1000 / L1175 / L1350 (calibration IDs); the lift height is joint state |
 | Maximum assembled height | 1700 mm (assembled-height envelope, not a shoulder height) |
@@ -84,8 +84,8 @@ Source: P-03 Decision Addendum revision 19.0, items 15 to 19 (12 October 2026), 
 | Head camera | Stereolabs ZED Mini, SKU ZED-121210, on the profile top pitch bracket; lens 42 mm ahead of and 223 mm above the shoulder (moved 20 mm forward on 28 Oct 2026; was 22 mm); pitch hp15 to hp35, baseline hp30, 30 degrees down (was hp25), P-03 rev20.0 items 15, 17 and 18 |
 | Base camera tilt | configuration IDs bt05 / bt10 / bt15, baseline bt10 |
 | Configuration IDs | `column` (`dold_v4_350`, `tl3_400`), `base_plate` (`bp000`, `bp050`), `head_pitch`, `base_tilt`; `mast_id` is gone (no longer used) |
-| Base controller | STM32H723ZG on NUCLEO-H723ZG; the lift is driven on CAN3 through a CAN-to-lift interface module |
-| Release gates (open, as listed in P-03 rev18.9) | DOLD holding on E-stop and power loss; supplier CAD; F2S rerun |
+| Base controller | STM32H723ZG on NUCLEO-H723ZG; the lift is driven through the lift node CTL-017 on CAN3 |
+| Release gates (open, P-03 rev20.2 item 26) | holding test on the delivered unit after an E-stop during motion and after power loss (DOLD written confirmation received 14 Oct 2026); supplier CAD; weighed mass; CAN3 lift interface; F2S rerun |
 
 ### Combined-model frame tree (owned by openamr-upperbody-sw)
 
