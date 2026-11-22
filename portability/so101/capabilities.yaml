@@ -1,0 +1,52 @@
+# SO-101 capability sketch. Not an I2 contract.
+# Values reflect adoodevv/so101_ros2 sim/fake-hardware. Real-robot rows stay unverified.
+
+device_id: so101
+display_name: SO-101
+role: secondary_portability_fixture
+provenance: sim_fake
+source_repo: https://github.com/adoodevv/so101_ros2
+
+model:
+  dof_arm: 5
+  gripper_joints: 1
+  mount_frame: base_link
+  ee_frame: gripper_frame_link
+  moveit_groups:
+    arm: [shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll]
+    gripper: [gripper]
+  named_states:
+    - home
+
+control:
+  command_interfaces: [position]
+  state_interfaces: [position]
+  arm_controller:
+    name: arm_controller
+    type: joint_trajectory_controller/JointTrajectoryController
+  gripper:
+    name: gripper_controller
+    mode: position
+    # Sim configs disagree (JTC vs ForwardCommand). Do not freeze.
+    type_unfrozen: true
+
+capabilities:
+  named_pose: true
+  plan: true
+  preview: true
+  execute: true
+  stop: true
+  gripper_position: true
+  cartesian_jog: limited   # reject when IK fails; do not invent a path
+  contact: false
+  move_until_contact: false
+  force: false
+  compliance: false
+  payload_estimate: false
+  bimanual: false
+  openarm_hardware: false
+  gripper_command_force: false
+
+rejection:
+  code: UNSUPPORTED_CAPABILITY
+  on_false_flag: reject_before_motion
