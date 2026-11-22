@@ -27,12 +27,20 @@ A development-only, headless bring-up of the **upstream** OpenArm 2.0 bimanual m
 
 | Repository | Commit | Licence |
 |---|---|---|
-| [enactic/openarm_ros2](https://github.com/enactic/openarm_ros2/tree/4e837e1d0dae692ff67b560b69d8d281d7a8d4ed) | `4e837e1d0dae692ff67b560b69d8d281d7a8d4ed` (main, 2026-06-29; `0.9.2-5-g4e837e1`) | Apache-2.0 |
+| [enactic/openarm_ros2](https://github.com/enactic/openarm_ros2/tree/f0f6b639a65b4d05c1b3055825f4da0205e9330d) | `f0f6b639a65b4d05c1b3055825f4da0205e9330d` (upstream MoveIt acceleration-limit fix, PR #96) | Apache-2.0 |
 | [enactic/openarm_description](https://github.com/enactic/openarm_description/tree/14ff67b638ff1c738a1b9a6be8aaa5ce5ed2c831) | `14ff67b638ff1c738a1b9a6be8aaa5ce5ed2c831` (main, 2026-09-09; `1.0.4-22-g14ff67b`) | Apache-2.0 |
 
-OpenArm 2.0 support exists only on upstream `main`: the model is under `assets/robot/openarm_v2.0`, and `openarm_ros2` gained it in 01b9f38 "Support OpenArm 2.0 (#91)". No release tag contains it, so the manifest pins commit SHAs. The build uses `openarm_description`, `openarm_bringup` and `openarm_bimanual_moveit_config`. `openarm_hardware` (the real CAN plugin) and the `openarm` meta-package are excluded with `COLCON_IGNORE`; `openarm_can` is not fetched. No upstream source is copied into this repository.
+OpenArm 2.0 support exists only on upstream `main`: the model is under `assets/robot/openarm_v2.0`, and `openarm_ros2` gained it in 01b9f38, "Support OpenArm 2.0 (#91)". No release tag contains it, so the manifest pins commit SHAs. The build uses `openarm_description`, `openarm_bringup` and `openarm_bimanual_moveit_config`. `openarm_hardware` (the real CAN plugin) and the `openarm` meta-package are excluded with `COLCON_IGNORE`; `openarm_can` is not fetched. No upstream source is copied into this repository.
 
 Verified with apt packages: `ros-jazzy-ros2-control` / `controller-manager` / `hardware-interface` 4.48.0, `joint-trajectory-controller` / `joint-state-broadcaster` 4.42.1, `moveit-*` 2.12.4, `xacro` 2.1.1, `robot-state-publisher` 3.3.4, `rclpy` 7.1.12, `rmw-fastrtps-cpp` 8.4.4 (default RMW).
+
+## Upstream MoveIt acceleration-limit fix
+
+The development manifest pins `enactic/openarm_ros2` to `f0f6b639a65b4d05c1b3055825f4da0205e9330d`, the upstream merge commit for MoveIt acceleration limits (upstream PR #96). The former local synthetic acceleration overlay has been removed; the fake baseline now tests the pinned upstream configuration directly.
+
+The integration suite includes `test_upstream_joint_limits_enable_acceleration` and headless MoveIt planning and fake-controller execution checks. Passing these tests demonstrates fake-profile planning behaviour only. It does not establish that the acceleration values are appropriate or qualified for physical hardware.
+
+Issue [#10](https://github.com/openAMRobot/openamrobot-manipulation/issues/10) remains open pending the project's owner-level acceptance and closure decision. The upstream fix and fake-profile tests do not, by themselves, establish physical-device acceptance.
 
 ## Commands
 
@@ -66,17 +74,38 @@ ros2 launch openarm_v2_fake_baseline openarm_v2_fake_moveit.launch.py use_fake_h
 
 | Suite | Checks |
 |---|---|
-| `test_fake_profile` (13) | v2.0 model is expanded (not v1.0), 18 unique movable joints (14 arm, 2 actuated fingers, 2 mimic fingers), only mock plugins, `ros2_control` joints match upstream controller YAML, targets stay inside URDF limits, guard rejects non-`true` values and a real-hardware expansion |
-| `test_launch_guard` (4) | both launch files reject `use_fake_hardware:=false` and a missing argument, with no node started |
-| `test_fake_bringup` (11) | runtime hardware is mock-only; JSB, both arm JTCs and both gripper JTCs active; `/joint_states` has the 16 actuated joints; 4 `follow_joint_trajectory` endpoints; a bounded trajectory on each arm and each gripper (targets derived from the URDF limits read back from `robot_state_publisher`) returns `SUCCESSFUL` and `/joint_states` reaches the target. Negative cases: a wrong endpoint name is not found; a deactivated right-arm controller shows as `inactive`, rejects the goal, and no joint moves |
-| `test_moveit_planning` (5) | `move_group` loads the upstream v2.0 config and answers plan requests; root-cause check (below); planning for both arms and MoveIt execution for the left arm are **strict xfail** |
+| `test_fake_profile` (15) | Fake-profile restrictions, v2.0 model and joint checks, bounded targets, mock-only hardware, and MoveIt controller/joint-name configuration mappings |
+| `test_launch_guard` (4) | Both launch files reject `use_fake_hardware:=false` and a missing argument, with no node started |
+| `test_fake_bringup` (11) | Runtime hardware is mock-only; JSB, both arm JTCs and both gripper JTCs active; `/joint_states` has the 16 actuated joints; four `follow_joint_trajectory` endpoints; bounded trajectories on both arms and both grippers return `SUCCESSFUL` and `/joint_states` reaches the target. Negative cases check wrong endpoint names and a deactivated right-arm controller |
+| `test_moveit_planning` (7) | Checks acceleration limits in the pinned upstream configuration, MoveIt planning-service availability, planning to the upstream `hands_up` state for both arms, execution of a planned left-arm trajectory, and plan-and-execute tests for both grippers through fake controllers |
 
-### Known upstream issue: MoveIt planning fails
+The fresh local rerun on 2026-10-29 passed all four integration suites. The four xUnit XML files contain 37 individual pytest cases: 15 fake-profile, four launch-guard, 11 fake-bringup, and seven MoveIt-planning cases. Colcon reports 41 total entries because its summary also counts four suite-level entries from `Testing/20261029-1829/Test.xml`; these are not four additional pytest cases. All four suites passed with zero errors, failures, or skipped tests. These are contributor-local results, not hosted CI results.
 
-At the pinned commit, `openarm_bimanual_moveit_config/config/openarm_v2.0/joint_limits.yaml` sets `has_acceleration_limits: false` for every joint. With MoveIt 2.12.4, the default OMPL pipeline's `AddTimeOptimalParameterization` adapter then rejects every plan: `No acceleration limit was defined for joint openarm_left_joint1!` → `FAILURE (99999)`. OMPL itself finds a path; only the time parameterization fails. In a scratch-only diagnostic (not committed), placeholder limits made both arms plan successfully. Those placeholder values are not proposed; real limits must come from upstream or the owners. The planning tests are strict xfails: they count as failures, not passes, and turn red once upstream changes. This package does not patch upstream configuration.
+## MoveIt acceleration-limit verification
 
-A second upstream mismatch: `moveit_controllers.yaml` (v2.0) declares the grippers as `GripperCommand` on `gripper_cmd`, but `openarm_bringup` runs them as `JointTrajectoryController` (`follow_joint_trajectory`). Gripper execution through MoveIt will therefore not work as configured. Only the direct JTC gripper path is tested here.
+The development dependency manifest now pins `enactic/openarm_ros2` at `f0f6b639a65b4d05c1b3055825f4da0205e9330d`, the upstream merge commit for acceleration limits (PR #96). The integration no longer applies a local synthetic acceleration overlay. The test `test_upstream_joint_limits_enable_acceleration` checks the pinned configuration, and the suite verifies headless planning and fake-controller execution against it.
+
+These checks establish behaviour in the isolated fake-hardware profile only. They do not qualify the upstream acceleration values for a physical robot, nor do they establish physical-device or safety acceptance. Issue [#10](https://github.com/openAMRobot/openamrobot-manipulation/issues/10) remains open pending the project's owner-level acceptance and closure decision.
+
+## MoveIt gripper execution gap — issue #11 remains open
+
+At the pinned upstream v2.0 revision, `moveit_controllers.yaml` declares the grippers using `GripperCommand` on `gripper_cmd`, while `openarm_bringup` runs them as `JointTrajectoryController` controllers exposing `follow_joint_trajectory`.
+
+The MoveIt controller configuration needs to use `FollowJointTrajectory` to match the controller setup. The fake-profile suite now plans and executes gripper trajectories through MoveIt for both arms, sends the planned trajectory through the fake execution path, and checks that mock joint state reaches the target. This is local fake-hardware evidence only; it does not prove that the unchanged upstream configuration works, or that real hardware executes gripper actions correctly.
+
+Issue [#11](https://github.com/openAMRobot/openamrobot-manipulation/issues/11) remains open pending owner review of the fake-profile execution evidence and confirmation of the issue's acceptance criteria. The fake-profile tests do not establish upstream configuration correctness or physical-device acceptance.
 
 ## Not validated by this baseline
 
 Fake trajectory success only shows that mock hardware followed the commanded positions. It does not validate the real hardware plugin, CAN, gains, zeroing, gripper contact or grasp force, payload, dynamics, collisions during execution, safety, or physical acceptance. It is not integrated simulation and not release readiness.
+
+## Current validation boundaries
+
+- **Hosted schema/conformance:** GitHub Actions Repository quality run [#48](https://github.com/openAMRobot/openamrobot-manipulation/actions/runs/41100746763) completed successfully on PR head `f6457d0629ec5c993af0671ff979f83b27d01679`; both `repository-quality` and `quality/test` passed. The schema/conformance gate contains 103 tests. This workflow does not run the separate ROS/fake-hardware integration suite.
+- **DCO / CLA:** Both checks passed on the submitted PR head.
+- **Fake-hardware integration:** The fresh local run on 2026-10-29 passed all four suites with zero errors, failures, or skipped tests. The four xUnit XML files contain 37 individual pytest cases (15 fake-profile, 4 launch-guard, 11 fake-bringup, 7 MoveIt-planning). Colcon reports 41 total entries because it also counts four suite-level entries in `Testing/20261029-1829/Test.xml`; these are not additional pytest cases. This is contributor-local evidence, not hosted CI evidence.
+- **MoveIt acceleration limits:** Uses the pinned upstream fix; no synthetic local acceleration overlay remains. Fake-profile planning success does not qualify the limits for physical hardware. Issue [#10](https://github.com/openAMRobot/openamrobot-manipulation/issues/10) remains open pending owner-level acceptance.
+- **Cross-repository upstream pin:** The development fake-hardware profile uses `enactic/openarm_ros2` at `f0f6b639a65b4d05c1b3055825f4da0205e9330d`, while upper-body PR [#21](https://github.com/openAMRobot/openamr-upperbody-sw/pull/21) records `4e837e1d0dae692ff67b560b69d8d281d7a8d4ed`. The newer pin is three commits ahead and changes both v1.0 and v2.0 joint-limit files plus bringup/launch files. PR #21's successful checks on the older pin do not validate the combined model against the newer acceleration limits. The model owners must adopt a common pin and rerun coordinated combined-model checks.
+- **MoveIt gripper action execution:** Both grippers have local fake-profile plan-and-execute test coverage; issue [#11](https://github.com/openAMRobot/openamrobot-manipulation/issues/11) remains open pending owner review. Physical-device acceptance remains unverified.
+- **A3/I1 contract:** Adnan accepted A3/I1 document Revision v2 / I1 API v1.0 and the observation-validity and `CompliantHold` decisions in [PR conversation](https://github.com/openAMRobot/openamrobot-manipulation/pull/20#issuecomment-6334318786). These semantic decisions are accepted, not pending. Canonical I1 interface changes and cross-repository alignment remain outstanding.
+- **Physical hardware, real CAN operation, and device acceptance:** Not validated.
